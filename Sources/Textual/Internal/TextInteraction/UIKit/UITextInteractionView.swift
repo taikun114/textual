@@ -28,6 +28,10 @@
     private(set) lazy var _tokenizer = UITextInputStringTokenizer(textInput: self)
     private let selectionInteraction: UITextInteraction
 
+    private var codeBlockPanGesture: UIPanGestureRecognizer?
+    private weak var targetScrollView: UIScrollView?
+    private var initialContentOffset: CGPoint = .zero
+
     init(
       model: TextSelectionModel,
       exclusionRects: [CGRect],
@@ -92,16 +96,23 @@
       model.selectionDidChange = { [weak self] in
         guard let self else { return }
         self.inputDelegate?.selectionDidChange(self)
+        self.autoScrollForSelectionIfNeeded()
       }
 
       let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
       addGestureRecognizer(tapGesture)
+
+      let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handleCodeBlockPan(_:)))
+      panGesture.delegate = self
+      addGestureRecognizer(panGesture)
+      self.codeBlockPanGesture = panGesture
 
       selectionInteraction.textInput = self
       selectionInteraction.delegate = self
 
       for gesture in selectionInteraction.gesturesForFailureRequirements {
         tapGesture.require(toFail: gesture)
+        panGesture.require(toFail: gesture)
       }
 
       addInteraction(selectionInteraction)
@@ -143,6 +154,73 @@
         viewController.present(activityViewController, animated: true)
       }
     }
+
+    @objc private func handleCodeBlockPan(_ gesture: UIPanGestureRecognizer) {
+      guard let sv = targetScrollView else { return }
+
+      switch gesture.state {
+      case .began:
+        initialContentOffset = sv.contentOffset
+        sv.layer.removeAllAnimations()
+      case .changed:
+        let translation = gesture.translation(in: self)
+        var newOffset = initialContentOffset
+        newOffset.x -= translation.x
+        let maxOffsetX = max(0, sv.contentSize.width - sv.bounds.width)
+        newOffset.x = max(0, min(newOffset.x, maxOffsetX))
+        sv.contentOffset = newOffset
+      case .ended, .cancelled:
+        let velocity = gesture.velocity(in: self)
+        if abs(velocity.x) > 50 {
+          var targetX = sv.contentOffset.x - (velocity.x * 0.2)
+          let maxOffsetX = max(0, sv.contentSize.width - sv.bounds.width)
+          targetX = max(0, min(targetX, maxOffsetX))
+          UIView.animate(withDuration: 0.3, delay: 0, options: [.curveEaseOut, .allowUserInteraction]) {
+            sv.contentOffset = CGPoint(x: targetX, y: sv.contentOffset.y)
+          }
+        }
+        targetScrollView = nil
+      default:
+        break
+      }
+    }
+
+    private func autoScrollForSelectionIfNeeded() {
+      guard let selectedRange = model.selectedRange else { return }
+      let startRect = model.caretRect(for: selectedRange.start)
+      let endRect = model.caretRect(for: selectedRange.end)
+
+      for rect in [startRect, endRect] {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        if let sv = findHorizontalScrollView(atLocation: center) {
+          let localRect = sv.convert(rect, from: self)
+          // Expand rect slightly to ensure text isn't flush with edge
+          let paddedRect = localRect.insetBy(dx: -16, dy: 0)
+          sv.scrollRectToVisible(paddedRect, animated: false)
+        }
+      }
+    }
+
+    private func findHorizontalScrollView(atLocation point: CGPoint) -> UIScrollView? {
+      let windowPoint = self.convert(point, to: nil)
+      func search(in view: UIView) -> UIScrollView? {
+        if let sv = view as? UIScrollView, !sv.isHidden {
+          if sv.contentSize.width > sv.bounds.width {
+            let rect = sv.convert(sv.bounds, to: nil)
+            if windowPoint.y >= rect.minY - 10 && windowPoint.y <= rect.maxY + 10 {
+              return sv
+            }
+          }
+        }
+        for subview in view.subviews {
+          if let found = search(in: subview) {
+            return found
+          }
+        }
+        return nil
+      }
+      return search(in: window?.rootViewController?.view ?? self)
+    }
   }
 
   extension UITextInteractionView: UITextInteractionDelegate {
@@ -158,6 +236,27 @@
 
     func interactionDidEnd(_ interaction: UITextInteraction) {
       logger.debug("interactionDidEnd")
+    }
+  }
+
+  extension UITextInteractionView: UIGestureRecognizerDelegate {
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+      if gestureRecognizer === codeBlockPanGesture, let pan = gestureRecognizer as? UIPanGestureRecognizer {
+        let velocity = pan.velocity(in: self)
+        if abs(velocity.x) > abs(velocity.y) {
+          let location = pan.location(in: self)
+          if let sv = findHorizontalScrollView(atLocation: location) {
+            targetScrollView = sv
+            return true
+          }
+        }
+        return false
+      }
+      return super.gestureRecognizerShouldBegin(gestureRecognizer)
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+      return false
     }
   }
 
