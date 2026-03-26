@@ -18,7 +18,11 @@
     override var acceptsFirstResponder: Bool { true }
     override var isFlipped: Bool { true }
 
-    private var dragStart: TextPosition?
+    private enum SelectionGranularity {
+      case character, word, block
+    }
+    private var selectionGranularity: SelectionGranularity = .character
+    private var anchorRange: TextRange?
     private var selectionAnchor: TextPosition?
 
     init(
@@ -62,24 +66,33 @@
         } else {
           resetSelection()
         }
-        dragStart = model.closestPosition(to: location)
+        if let position = model.closestPosition(to: location) {
+          selectionGranularity = .character
+          anchorRange = TextRange(start: position, end: position)
+        }
       case 2:
-        if let position = model.closestPosition(to: location) {
-          model.selectedRange = model.wordRange(for: position)
+        if let position = model.closestPosition(to: location),
+          let range = model.wordRange(for: position)
+        {
+          selectionGranularity = .word
+          anchorRange = range
+          model.selectedRange = range
         }
-        dragStart = nil
       case 3:
-        if let position = model.closestPosition(to: location) {
-          model.selectedRange = model.blockRange(for: position)
+        if let position = model.closestPosition(to: location),
+          let range = model.blockRange(for: position)
+        {
+          selectionGranularity = .block
+          anchorRange = range
+          model.selectedRange = range
         }
-        dragStart = nil
       default:
         break
       }
     }
 
     override func mouseDragged(with event: NSEvent) {
-      guard let dragStart else {
+      guard let anchorRange else {
         return
       }
 
@@ -89,12 +102,70 @@
         return
       }
 
-      model.selectedRange = TextRange(from: dragStart, to: currentPosition)
+      switch selectionGranularity {
+      case .character:
+        model.selectedRange = TextRange(from: anchorRange.start, to: currentPosition)
+      case .word:
+        if let currentWordRange = model.wordRange(for: currentPosition) {
+          model.selectedRange = TextRange(
+            start: min(anchorRange.start, currentWordRange.start),
+            end: max(anchorRange.end, currentWordRange.end))
+        }
+      case .block:
+        if let currentBlockRange = model.blockRange(for: currentPosition) {
+          model.selectedRange = TextRange(
+            start: min(anchorRange.start, currentBlockRange.start),
+            end: max(anchorRange.end, currentBlockRange.end))
+        }
+      }
+
       autoscroll(with: event)
+
+      // Ensure the current selection position is visible in any supporting scroll views
+      let mouseWindowLocation = event.locationInWindow
+      if let scrollView = findHorizontalScrollView(atY: mouseWindowLocation.y) {
+        scrollView.documentView?.autoscroll(with: event)
+      }
+    }
+
+    private func findHorizontalScrollView(atY windowY: CGFloat) -> NSScrollView? {
+      func search(in view: NSView) -> NSScrollView? {
+        if let sv = view as? NSScrollView, sv !== self.enclosingScrollView {
+          // Window座標系でスクロールビューのY座標範囲に一致するかチェック
+          let rect = sv.convert(sv.bounds, to: nil)
+          // marginを持たせて判定
+          if windowY >= rect.minY - 10 && windowY <= rect.maxY + 10 {
+            return sv
+          }
+        }
+        for subview in view.subviews {
+          if let found = search(in: subview) {
+            return found
+          }
+        }
+        return nil
+      }
+      return search(in: window?.contentView ?? self)
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+      // Find the view behind us
+      let isHidden = self.isHidden
+      self.isHidden = true
+      let viewBehind = window?.contentView?.hitTest(event.locationInWindow)
+      self.isHidden = isHidden
+
+      if let scrollView = viewBehind as? NSScrollView ?? viewBehind?.enclosingScrollView,
+        scrollView !== self.enclosingScrollView
+      {
+        scrollView.scrollWheel(with: event)
+      } else {
+        super.scrollWheel(with: event)
+      }
     }
 
     override func mouseUp(with event: NSEvent) {
-      dragStart = nil
+      anchorRange = nil
     }
 
     override func rightMouseDown(with event: NSEvent) {

@@ -39,17 +39,19 @@ public struct Overflow<Content: View>: View {
   @State private var containerWidth: CGFloat?
   @State private var contentHeight: CGFloat?
 
+  private let isIntegratedSelection: Bool
   private let content: (OverflowState) -> Content
 
   /// Creates an overflow container.
-  public init(@ViewBuilder content: @escaping () -> Content) {
-    self.init { _ in
+  public init(isIntegratedSelection: Bool = false, @ViewBuilder content: @escaping () -> Content) {
+    self.init(isIntegratedSelection: isIntegratedSelection) { _ in
       content()
     }
   }
 
   /// Creates an overflow container that exposes the current overflow state.
-  public init(@ViewBuilder content: @escaping (_ state: OverflowState) -> Content) {
+  public init(isIntegratedSelection: Bool = false, @ViewBuilder content: @escaping (_ state: OverflowState) -> Content) {
+    self.isIntegratedSelection = isIntegratedSelection
     self.content = content
   }
 
@@ -70,9 +72,12 @@ public struct Overflow<Content: View>: View {
               contentHeight = $0
             }
             // Make text selection local in scrollable regions
-            .modifier(TextSelectionInteraction())
-            .transformPreference(Text.LayoutKey.self) { value in
-              value = []
+            .if(!isIntegratedSelection) {
+              $0
+                .modifier(TextSelectionInteraction())
+                .transformPreference(Text.LayoutKey.self) { value in
+                  value = []
+                }
             }
         }
       }
@@ -80,15 +85,17 @@ public struct Overflow<Content: View>: View {
         containerWidth = $1
       }
       // Propagate gesture exclusion area
-      .background(
-        GeometryReader { geometry in
-          Color.clear
-            .preference(
-              key: OverflowFrameKey.self,
-              value: [geometry.frame(in: .textContainer)]
-            )
-        }
-      )
+      .if(!isIntegratedSelection) {
+        $0.background(
+          GeometryReader { geometry in
+            Color.clear
+              .preference(
+                key: OverflowFrameKey.self,
+                value: [geometry.frame(in: .textContainer)]
+              )
+          }
+        )
+      }
     }
   }
 }

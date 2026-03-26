@@ -7,7 +7,7 @@ extension StructuredText {
     public init() {}
 
     public func makeBody(configuration: Configuration) -> some View {
-      Overflow {
+      Overflow(isIntegratedSelection: true) {
         configuration.label
           .textual.lineSpacing(.fontScaled(0.225))
           .textual.fontScale(0.85)
