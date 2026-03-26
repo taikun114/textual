@@ -1,9 +1,13 @@
 # Textual
-[![CI](https://github.com/gonzalezreal/textual/workflows/CI/badge.svg)](https://github.com/gonzalezreal/textual/actions?query=workflow%3ACI)
-[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fgonzalezreal%2Ftextual%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/gonzalezreal/textual)
-[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fgonzalezreal%2Ftextual%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/gonzalezreal/textual)
 
 Render and customize rich attributed text in SwiftUI.
+
+> [!NOTE]
+> This is a customized version based on the original [Textual 0.3.1](https://github.com/gonzalezreal/textual/tree/0.3.1).\
+> I've made some adjustments to fix several issues and optimize behavior that occurred in [Mocolamma](https://github.com/taikun114/Mocolamma), an app I'm developing.\
+> As a result, the way it works and its behavior may differ slightly from the original Textual.
+>
+> The following is the original README. Please note that the changes have not been reflected.
 
 - [Overview](#overview)
 - [Getting Started](#getting-started)
