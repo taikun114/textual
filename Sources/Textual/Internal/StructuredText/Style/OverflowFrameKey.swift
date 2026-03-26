@@ -15,3 +15,11 @@ struct OverflowFrameKey: PreferenceKey {
     value.append(contentsOf: nextValue())
   }
 }
+
+struct InteractiveFrameKey: PreferenceKey {
+  static let defaultValue: [CGRect] = []
+
+  static func reduce(value: inout [CGRect], nextValue: () -> [CGRect]) {
+    value.append(contentsOf: nextValue())
+  }
+}

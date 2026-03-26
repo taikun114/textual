@@ -80,6 +80,10 @@
       layoutCollection.url(for: point)
     }
 
+    func isPointOverText(_ point: CGPoint) -> Bool {
+      layoutCollection.layouts.contains { $0.frame.contains(point) }
+    }
+
     func layoutIndex(of layout: Text.Layout) -> Int? {
       layoutCollection.index(of: layout)
     }

@@ -14,6 +14,7 @@
 
   struct AppKitTextSelectionInteraction: ViewModifier {
     @State private var cursorPushed = false
+    @State private var interactiveFrames: [CGRect] = []
 
     private let model: TextSelectionModel
 
@@ -23,11 +24,12 @@
 
     func body(content: Content) -> some View {
       content
-        // We need the selection model at text fragment level for the
-        // text selection background and selected attachment dimming
         .environment(model)
-        .overlayPreferenceValue(OverflowFrameKey.self) { frames in
-          AppKitTextInteractionOverlay(model: model, overflowFrames: frames)
+        .onPreferenceChange(InteractiveFrameKey.self) { frames in
+          interactiveFrames = frames
+        }
+        .overlayPreferenceValue(OverflowFrameKey.self) { overflowFrames in
+          AppKitTextInteractionOverlay(model: model, overflowFrames: overflowFrames)
             .onContinuousHover { phase in
               updateCursor(for: phase, model: model)
             }
@@ -37,10 +39,19 @@
     private func updateCursor(for phase: HoverPhase, model: TextSelectionModel) {
       switch phase {
       case .active(let location):
-        let cursor =
-          model.url(for: location) != nil
-          ? NSCursor.pointingHand
-          : NSCursor.iBeam
+        let isInteractive = interactiveFrames.contains { $0.contains(location) }
+
+        let cursor: NSCursor
+        if isInteractive {
+          cursor = .pointingHand
+        } else if model.url(for: location) != nil {
+          cursor = .pointingHand
+        } else if model.isPointOverText(location) {
+          cursor = .iBeam
+        } else {
+          cursor = .arrow
+        }
+
         if !cursorPushed {
           cursor.push()
           cursorPushed = true

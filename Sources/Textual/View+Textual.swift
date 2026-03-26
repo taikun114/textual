@@ -157,6 +157,21 @@ extension TextualNamespace where Base: View {
     #endif
   }
 
+  /// Excludes the view from text selection hit testing, allowing it to receive touch or click events.
+  ///
+  /// Use this modifier on interactive elements (like buttons) inside a custom `CodeBlockStyle`
+  /// or other areas where text selection is enabled.
+  public func excludeFromTextSelection() -> some View {
+    base.background(
+      GeometryReader { proxy in
+        let frame = proxy.frame(in: .textContainer)
+        Color.clear
+          .preference(key: OverflowFrameKey.self, value: [frame])
+          .preference(key: InteractiveFrameKey.self, value: [frame])
+      }
+    )
+  }
+
   /// Sets the spacing used between table cells in ``StructuredText``.
   public func tableCellSpacing(
     horizontal: CGFloat? = nil,
