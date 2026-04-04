@@ -249,9 +249,15 @@ extension TextualNamespace where Base: View {
   }
 
   /// Sets the syntax highlighting theme used by code blocks in ``StructuredText``.
-  @inlinable
-  public func highlighterTheme(_ highlighterTheme: StructuredText.HighlighterTheme) -> some View {
+  @inlinable public func highlighterTheme(_ highlighterTheme: StructuredText.HighlighterTheme) -> some View {
     base.environment(\.highlighterTheme, highlighterTheme)
+  }
+
+  /// Enables or disables syntax highlighting for code blocks in ``StructuredText``.
+  ///
+  /// When disabled, code blocks display as plain text, skipping the tokenization process.
+  @inlinable public func syntaxHighlightingEnabled(_ isEnabled: Bool) -> some View {
+    base.environment(\.isSyntaxHighlightingEnabled, isEnabled)
   }
 
   /// Sets the code block style used by ``StructuredText``.

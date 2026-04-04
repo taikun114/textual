@@ -34,4 +34,7 @@ extension StructuredText {
 extension EnvironmentValues {
   @usableFromInline
   @Entry var highlighterTheme: StructuredText.HighlighterTheme = .default
+
+  @usableFromInline
+  @Entry var isSyntaxHighlightingEnabled: Bool = true
 }
