@@ -88,6 +88,7 @@ extension StructuredText {
           )
         )
       )
+      .fixedSize()
       .background {
         // Propagate the marker width
         GeometryReader { proxy in
