@@ -87,6 +87,10 @@
     func layoutIndex(of layout: Text.Layout) -> Int? {
       layoutCollection.index(of: layout)
     }
+
+    var layoutFrames: [CGRect] {
+      layoutCollection.layouts.map(\.frame)
+    }
   }
 
   extension TextSelectionModel {

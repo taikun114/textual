@@ -118,10 +118,10 @@ public struct StructuredText: View {
   public var body: some View {
     WithAttachments(attributedString) {
       BlockContent(content: $0)
+        .coordinateSpace(.textContainer)
         .modifier(TextSelectionInteraction())
         .modifier(TextSelectionCoordination())
     }
-    .coordinateSpace(.textContainer)
     .onChange(of: markup, initial: true) {
       markupDidChange(markup)
     }
