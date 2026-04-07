@@ -50,9 +50,59 @@
 
       if isExcluded {
         return nil
-      } else {
-        return super.hitTest(point)
       }
+
+      guard let result = super.hitTest(point) else { return nil }
+
+      if result === self {
+        // If the click is on us, check if it's actually over a scroller in a ScrollView behind us.
+        // We traverse the window hierarchy to find views behind our current branch.
+        let windowPoint = convert(point, to: nil)
+        if isPointInScroller(windowPoint, startingAt: window?.contentView) {
+          return nil
+        }
+      }
+
+      return result
+    }
+
+    private func isPointInScroller(_ windowPoint: NSPoint, startingAt view: NSView?) -> Bool {
+      guard let view = view else { return false }
+      
+      // Convert point to this view's system to check if it's within bounds
+      let localPoint = view.convert(windowPoint, from: nil)
+      if !view.visibleRect.contains(localPoint) {
+        return false
+      }
+      
+      // If this view is in our overlay's branch, skip it
+      if view === self || self.isDescendant(of: view) {
+        // But we still need to check sibling subviews that might be behind us
+        for subview in view.subviews.reversed() {
+          if subview === self || self.isDescendant(of: subview) {
+            // Found the branch containing the overlay, skip it and check what's behind
+            continue
+          }
+          if isPointInScroller(windowPoint, startingAt: subview) {
+            return true
+          }
+        }
+        return false
+      }
+      
+      // If it's a scroller or part of a scroller, we found it
+      if view is NSScroller || view.enclosingScrollView?.horizontalScroller === view || view.enclosingScrollView?.verticalScroller === view {
+        return true
+      }
+      
+      // Check subviews (top-most first)
+      for subview in view.subviews.reversed() {
+        if isPointInScroller(windowPoint, startingAt: subview) {
+          return true
+        }
+      }
+      
+      return false
     }
 
     override func mouseDown(with event: NSEvent) {
