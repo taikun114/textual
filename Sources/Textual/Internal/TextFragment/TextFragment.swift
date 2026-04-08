@@ -38,8 +38,8 @@ struct TextFragment<Content: AttributedStringProtocol>: View {
   var body: some View {
     text
       .customAttribute(TextFragmentAttribute())
-      .onGeometryChange(for: CGSize?.self, of: \.textContainerSize) { size in
-        guard let size, let textBuilder else { return }
+      .onGeometryChange(for: CGSize.self, of: \.size) { size in
+        guard let textBuilder else { return }
         textBuilder.sizeChanged(size, environment: textEnvironment)
       }
       .onChange(of: content, initial: true) { _, newValue in
