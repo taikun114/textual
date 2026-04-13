@@ -2,9 +2,9 @@ import Foundation
 
 extension AttributedStringMarkdownParser {
   /// A syntax extension that replaces matched tokens after Markdown parsing.
-  public struct SyntaxExtension {
+  public struct SyntaxExtension: Sendable {
     let patterns: [PatternTokenizer.Pattern]
-    let replace:
+    let replace: @Sendable
       (
         _ token: PatternTokenizer.Token,
         _ attributes: AttributeContainer

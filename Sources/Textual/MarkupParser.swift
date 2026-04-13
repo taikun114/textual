@@ -28,8 +28,7 @@ import Foundation
 /// For structured content, make sure your output carries the appropriate presentation intents.
 /// Textual groups content into blocks by walking `PresentationIntent` changes across runs, so
 /// missing or inconsistent intents will typically show up as incorrect block rendering.
-@MainActor
-public protocol MarkupParser {
+public protocol MarkupParser: Sendable {
   /// Returns attributed content for the given input string.
   ///
   /// - Parameter input: The markup source string.

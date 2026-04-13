@@ -40,6 +40,7 @@ struct HighlightedTextFragment: View {
         )
       }
       .onChange(of: Tuple(model.tokens, textEnvironment)) { _, newValue in
+        guard isSyntaxHighlightingEnabled else { return }
         model.highlight(
           tokens: newValue.values.0,
           presentationIntent: content.presentationIntent,
@@ -60,10 +61,17 @@ extension HighlightedTextFragment {
       languageHint: String?,
       isEnabled: Bool
     ) async {
+      // Skip processing when syntax highlighting is disabled
+      guard isEnabled else {
+        self.tokens = []
+        self.highlightedCode = nil
+        return
+      }
+
       let code = String(content.characters[...])
       tokens = [CodeToken(content: code, type: .plain)]
 
-      if isEnabled, let tokenizer = CodeTokenizer.shared, let languageHint {
+      if let tokenizer = CodeTokenizer.shared, let languageHint {
         tokens = await tokenizer.tokenize(code: code, language: languageHint)
       }
     }
@@ -74,6 +82,12 @@ extension HighlightedTextFragment {
       using theme: StructuredText.HighlighterTheme,
       environment: TextEnvironmentValues
     ) {
+      // Skip if there are no tokens (or highlighting is disabled)
+      guard !tokens.isEmpty else {
+        self.highlightedCode = nil
+        return
+      }
+
       var attributes = AttributeContainer()
       // Re-apply the presentation intent for pasteboard formatters
       attributes.presentationIntent = presentationIntent

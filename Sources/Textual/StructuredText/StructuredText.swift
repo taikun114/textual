@@ -122,15 +122,19 @@ public struct StructuredText: View {
         .modifier(TextSelectionInteraction())
         .modifier(TextSelectionCoordination())
     }
-    .onChange(of: markup, initial: true) {
-      markupDidChange(markup)
+    .task(id: markup) {
+      // Offload parsing to a background thread and cancel existing stale tasks
+      // to handle high-frequency updates (e.g., during streaming).
+      let parsed = await Task.detached(priority: .userInitiated) {
+        (try? parser.attributedString(for: markup)) ?? .init()
+      }.value
+
+      if !Task.isCancelled {
+        self.attributedString = parsed
+      }
     }
     // Disable line limit to avoid per-fragment truncation
     .lineLimit(nil)
-  }
-
-  private func markupDidChange(_ markup: String) {
-    self.attributedString = (try? parser.attributedString(for: markup)) ?? .init()
   }
 }
 

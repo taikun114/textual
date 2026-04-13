@@ -74,7 +74,7 @@ struct PatternTokenizer {
 }
 
 extension PatternTokenizer {
-  struct Pattern {
+  struct Pattern: @unchecked Sendable {
     let regex: Regex<(Substring, Substring)>
     let tokenType: TokenType
   }

@@ -62,6 +62,10 @@ extension StructuredText {
   fileprivate struct BlockVStackLayout: Layout {
     struct Cache {
       let spacings: [CGFloat]
+      var proposalWidth: CGFloat?
+      var totalWidth: CGFloat?
+      var totalHeight: CGFloat?
+      var subviewSizes: [CGSize] = []
     }
 
     let textAlignment: TextAlignment
@@ -85,21 +89,35 @@ extension StructuredText {
       proposal: ProposedViewSize,
       subviews: Subviews, cache: inout Cache
     ) -> CGSize {
+      // Return cached size if the proposal width matches the cached width
+      if let cachedHeight = cache.totalHeight, let cachedWidth = cache.totalWidth, cache.proposalWidth == proposal.width {
+        return CGSize(width: cachedWidth, height: cachedHeight)
+      }
+
       if let width = proposal.width, width <= 0 {
         return .zero
       }
 
-      var size = CGSize.zero
+      var totalHeight: CGFloat = 0
+      var maxWidth: CGFloat = 0
+      var subviewSizes: [CGSize] = []
 
       for view in subviews {
         let viewSize = view.sizeThatFits(.init(width: proposal.width, height: nil))
-        size.height += viewSize.height
-        size.width = max(size.width, viewSize.width)
+        totalHeight += viewSize.height
+        maxWidth = max(maxWidth, viewSize.width)
+        subviewSizes.append(viewSize)
       }
 
-      size.height += cache.spacings.reduce(0, +)
+      totalHeight += cache.spacings.reduce(0, +)
 
-      return size
+      // キャッシュを更新
+      cache.proposalWidth = proposal.width
+      cache.totalWidth = maxWidth
+      cache.totalHeight = totalHeight
+      cache.subviewSizes = subviewSizes
+
+      return CGSize(width: maxWidth, height: totalHeight)
     }
 
     func placeSubviews(
@@ -107,12 +125,15 @@ extension StructuredText {
       proposal: ProposedViewSize,
       subviews: Subviews, cache: inout Cache
     ) {
+      // Although sizeThatFits should have been called before placeSubviews,
+      // recalculate if the cache is missing or the width has changed.
+      if cache.subviewSizes.count != subviews.count || cache.proposalWidth != bounds.width {
+        _ = sizeThatFits(proposal: .init(bounds.size), subviews: subviews, cache: &cache)
+      }
+
       var currentY: CGFloat = 0
 
-      for (index, view) in zip(subviews.indices, subviews) {
-        let viewProposal = ProposedViewSize(width: proposal.width, height: nil)
-        let viewSize = view.sizeThatFits(viewProposal)
-
+      for (index, (view, viewSize)) in zip(subviews, cache.subviewSizes).enumerated() {
         var point = bounds.origin
         let alignment = view[BlockAlignmentKey.self] ?? textAlignment
 
@@ -127,7 +148,7 @@ extension StructuredText {
 
         point.y += currentY
 
-        view.place(at: point, proposal: viewProposal)
+        view.place(at: point, proposal: ProposedViewSize(viewSize))
 
         currentY += viewSize.height
 
