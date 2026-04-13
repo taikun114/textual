@@ -139,6 +139,39 @@ public struct StructuredText: View {
 }
 
 extension StructuredText {
+  /// A version of `StructuredText` optimized for streaming content.
+  ///
+  /// Incremental parsing and rendering are performed by splitting the markdown into blocks.
+  public struct Streaming: View {
+    private let markdown: String
+    private let baseURL: URL?
+    private let syntaxExtensions: [AttributedStringMarkdownParser.SyntaxExtension]
+
+    public init(
+      markdown: String,
+      baseURL: URL? = nil,
+      syntaxExtensions: [AttributedStringMarkdownParser.SyntaxExtension] = []
+    ) {
+      self.markdown = markdown
+      self.baseURL = baseURL
+      self.syntaxExtensions = syntaxExtensions
+    }
+
+    public var body: some View {
+      let blocks = MarkdownBlockSplitter.split(markdown)
+      // Use a plain VStack because StructuredText views already provide their own BlockVStack.
+      // Margin collapsing doesn't work across multiple StructuredText views, but splitting
+      // at \n\n boundaries generally aligns with paragraph spacing goals.
+      VStack(alignment: .leading, spacing: 0) {
+        ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+          StructuredText(markdown: block, baseURL: baseURL, syntaxExtensions: syntaxExtensions)
+        }
+      }
+    }
+  }
+}
+
+extension StructuredText {
   /// Creates a structured-text view from a Markdown string.
   ///
   /// This is a convenience initializer that uses Textual’s Markdown parser. To render other
