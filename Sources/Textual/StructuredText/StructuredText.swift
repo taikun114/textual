@@ -121,6 +121,7 @@ public struct StructuredText: View {
         .coordinateSpace(.textContainer)
         .modifier(TextSelectionInteraction())
         .modifier(TextSelectionCoordination())
+        .accessibilityElement(children: .contain)
     }
     .task(id: markup) {
       // Offload parsing to a background thread and cancel existing stale tasks
@@ -146,25 +147,41 @@ extension StructuredText {
     private let markdown: String
     private let baseURL: URL?
     private let syntaxExtensions: [AttributedStringMarkdownParser.SyntaxExtension]
+    private let isStreaming: Bool
+
+    @State private var blocks: [String] = []
 
     public init(
       markdown: String,
       baseURL: URL? = nil,
-      syntaxExtensions: [AttributedStringMarkdownParser.SyntaxExtension] = []
+      syntaxExtensions: [AttributedStringMarkdownParser.SyntaxExtension] = [],
+      isStreaming: Bool = false
     ) {
       self.markdown = markdown
       self.baseURL = baseURL
       self.syntaxExtensions = syntaxExtensions
+      self.isStreaming = isStreaming
+      
+      // Initialize blocks immediately to prevent a one-frame flicker of empty content.
+      self._blocks = State(initialValue: MarkdownBlockSplitter.split(markdown))
     }
 
     public var body: some View {
-      let blocks = MarkdownBlockSplitter.split(markdown)
-      // Use a plain VStack because StructuredText views already provide their own BlockVStack.
-      // Margin collapsing doesn't work across multiple StructuredText views, but splitting
-      // at \n\n boundaries generally aligns with paragraph spacing goals.
       VStack(alignment: .leading, spacing: 0) {
         ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
           StructuredText(markdown: block, baseURL: baseURL, syntaxExtensions: syntaxExtensions)
+        }
+      }
+      .task(id: markdown) {
+        // 分割処理自体をバックグラウンドへ
+        let result = await Task.detached(priority: .userInitiated) {
+          MarkdownBlockSplitter.split(markdown)
+        }.value
+        
+        if !Task.isCancelled {
+          if self.blocks != result {
+            self.blocks = result
+          }
         }
       }
     }

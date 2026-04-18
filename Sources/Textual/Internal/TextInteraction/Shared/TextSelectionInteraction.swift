@@ -22,14 +22,32 @@ struct TextSelectionInteraction: ViewModifier {
   func body(content: Content) -> some View {
     #if TEXTUAL_ENABLE_TEXT_SELECTION
       if textSelection.allowsSelection {
-        content
-          .overlayTextLayoutCollection { layoutCollection in
-            Color.clear
-              .onChange(of: AnyTextLayoutCollection(layoutCollection), initial: true) {
-                model.setCoordinator(coordinator)
-                model.setLayoutCollection(layoutCollection)
-              }
-          }
+          content
+            .overlayTextLayoutCollection { layoutCollection in
+              Color.clear
+                .task(id: AnyTextLayoutCollection(layoutCollection)) {
+                  do {
+                     // ストリーミング完了時に複数のブロックが一斉に更新されるのを防ぐため、分散させる
+                     let jitterSeconds = Double.random(in: 0...0.5)
+                     try await Task.sleep(nanoseconds: UInt64((0.4 + jitterSeconds) * 1_000_000_000))
+                     
+                     guard textSelection.allowsSelection else { return }
+                     
+                     // メインActor上で実行するが、さらに次のRunLoopに逃がすことで
+                     // SwiftUI の「同じフレームでの更新」エラーを物理的に回避する
+                     await MainActor.run {
+                       DispatchQueue.main.async {
+                         if !Task.isCancelled {
+                           model.setCoordinator(coordinator)
+                           model.setLayoutCollection(layoutCollection)
+                         }
+                       }
+                     }
+                  } catch {
+                    // キャンセル時は無視
+                  }
+                }
+            }
           .modifier(PlatformTextSelectionInteraction(model: model))
       } else {
         content

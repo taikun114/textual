@@ -157,6 +157,18 @@ extension TextualNamespace where Base: View {
     #endif
   }
 
+  /// Enables or disables text selection for ``InlineText`` and ``StructuredText`` using a Boolean value.
+  @available(tvOS, unavailable)
+  @available(watchOS, unavailable)
+  @inlinable
+  public func textSelection(_ isEnabled: Bool) -> some View {
+    #if TEXTUAL_ENABLE_TEXT_SELECTION
+      base.environment(\.textSelection, isEnabled ? EnabledTextSelectability.self : DisabledTextSelectability.self)
+    #else
+      base
+    #endif
+  }
+
   /// Excludes the view from text selection hit testing, allowing it to receive touch or click events.
   ///
   /// Use this modifier on interactive elements (like buttons) inside a custom `CodeBlockStyle`
