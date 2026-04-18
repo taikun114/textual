@@ -107,6 +107,9 @@ public struct StructuredText: View {
   private let markup: String
   private let parser: any MarkupParser
 
+  // Streaming内のブロックでは親がテキスト選択を管理するため、個別のInteractionを無効化する
+  var managesOwnSelection: Bool = true
+
   /// Creates a structured-text view by parsing `markup` with a custom parser.
   ///
   /// Use this initializer when you want to provide your own `MarkupParser` implementation.
@@ -120,7 +123,9 @@ public struct StructuredText: View {
       BlockContent(content: $0)
         .coordinateSpace(.textContainer)
         .modifier(TextSelectionInteraction())
-        .modifier(TextSelectionCoordination())
+        .if(managesOwnSelection) {
+          $0.modifier(TextSelectionCoordination())
+        }
         .accessibilityElement(children: .contain)
     }
     .task(id: markup) {
@@ -169,9 +174,14 @@ extension StructuredText {
     public var body: some View {
       VStack(alignment: .leading, spacing: 0) {
         ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
-          StructuredText(markdown: block, baseURL: baseURL, syntaxExtensions: syntaxExtensions)
+          // 各ブロックは独自のTextSelectionCoordinationを持たず、親のStreamingが管理する
+          var blockView = StructuredText(markdown: block, baseURL: baseURL, syntaxExtensions: syntaxExtensions)
+          let _ = { blockView.managesOwnSelection = false }()
+          blockView
         }
       }
+      // Streaming全体で1つのTextSelectionCoordinationを共有
+      .modifier(TextSelectionCoordination())
       .task(id: markdown) {
         // 分割処理自体をバックグラウンドへ
         let result = await Task.detached(priority: .userInitiated) {
