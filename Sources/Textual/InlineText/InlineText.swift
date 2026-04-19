@@ -95,31 +95,64 @@ import SwiftUI
 ///   .textual.inlineStyle(style)
 /// ```
 public struct InlineText: View {
-  @State private var attributedString = AttributedString()
+  @State private var model = InlineTextModel()
 
   private let markup: String
   private let parser: any MarkupParser
+  private let managesOwnSelection: Bool
 
-  /// Creates inline text from markup using the given ``MarkupParser`` implementation.
-  ///
-  /// - Parameters:
-  ///   - markup: The markup string to parse and display.
-  ///   - parser: The parser to use for converting markup to attributed content.
-  public init(_ markup: String, parser: any MarkupParser) {
+  public init(
+    _ markup: String,
+    parser: any MarkupParser,
+    managesOwnSelection: Bool = true
+  ) {
     self.markup = markup
     self.parser = parser
+    self.managesOwnSelection = managesOwnSelection
   }
 
   public var body: some View {
-    WithAttachments(attributedString) {
+    text
+      .if(managesOwnSelection) {
+        $0.modifier(TextSelectionInteraction())
+      }
+      .coordinateSpace(.textContainer)
+      .task(id: markup) {
+        await model.process(markup: markup, parser: parser)
+      }
+  }
+
+  private var text: some View {
+    WithAttachments(model.attributedString) {
       WithInlineStyle($0) {
         TextFragment($0)
-          .modifier(TextSelectionInteraction())
       }
     }
-    .coordinateSpace(.textContainer)
-    .onChange(of: markup, initial: true) { _, value in
-      self.attributedString = (try? parser.attributedString(for: value)) ?? .init()
+  }
+
+  @MainActor @Observable final class InlineTextModel {
+    var attributedString = AttributedString()
+    private var lastUpdateTime: Date = .distantPast
+
+    func process(markup: String, parser: any MarkupParser) async {
+      let now = Date()
+      // ストリーミング中は最大 0.1秒間隔で更新を制限しつつ、最後の一歩は確実に反映
+      let interval: TimeInterval = 0.1
+
+      if now.timeIntervalSince(lastUpdateTime) < interval {
+        try? await Task.sleep(nanoseconds: 100_000_000)
+      }
+
+      if Task.isCancelled { return }
+
+      let parsed = await Task.detached(priority: .userInitiated) {
+        (try? parser.attributedString(for: markup)) ?? .init()
+      }.value
+
+      if !Task.isCancelled {
+        self.attributedString = parsed
+        self.lastUpdateTime = Date()
+      }
     }
   }
 }

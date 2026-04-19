@@ -24,13 +24,17 @@ extension StructuredText {
 }
 
 extension StructuredText {
-  struct Block: View {
+  struct Block: View, Equatable {
     private let intent: PresentationIntent.IntentType?
     private let content: AttributedSubstring
 
     init(intent: PresentationIntent.IntentType?, content: AttributedSubstring) {
       self.intent = intent
       self.content = content
+    }
+
+    nonisolated static func == (lhs: Block, rhs: Block) -> Bool {
+      return lhs.intent == rhs.intent && lhs.content == rhs.content
     }
 
     var body: some View {

@@ -37,18 +37,16 @@
           }
         }
       }
-      .onChange(of: textSelectionModel?.selectedRange, initial: true, updateSelectionRects)
-      .onChange(of: layout, initial: true, updateSelectionRects)
-    }
-
-    private func updateSelectionRects() {
-      if let textSelectionModel,
-        let selectedRange = textSelectionModel.selectedRange
-      {
-        selectionRects = textSelectionModel.selectionRects(for: selectedRange, layout: layout)
-      } else {
-        selectionRects = []
+      .task(id: Tuple(textSelectionModel?.selectedRange, layout.count, origin)) {
+        if let textSelectionModel,
+          let selectedRange = textSelectionModel.selectedRange
+        {
+          selectionRects = textSelectionModel.selectionRects(for: selectedRange, layout: layout)
+        } else {
+          selectionRects = []
+        }
       }
     }
+
   }
 #endif

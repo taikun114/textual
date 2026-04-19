@@ -42,8 +42,13 @@ struct TextFragment<Content: AttributedStringProtocol>: View {
         guard let textBuilder else { return }
         textBuilder.sizeChanged(size, environment: textEnvironment)
       }
-      .onChange(of: content, initial: true) { _, newValue in
-        self.textBuilder = TextBuilder(newValue, environment: textEnvironment)
+      .task(id: {
+        var hasher = Hasher()
+        hasher.combine(String(content.characters[...]))
+        hasher.combine(textEnvironment)
+        return hasher.finalize()
+      }()) {
+        self.textBuilder = TextBuilder(content, environment: textEnvironment)
       }
       .modifier(TextSelectionBackground())
       .modifier(TextFragmentOverlay(attachments: content.attachments()))

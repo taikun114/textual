@@ -12,6 +12,14 @@
       self.geometry = geometry
     }
 
+    var identity: Int {
+      var hasher = Hasher()
+      for layout in base {
+        hasher.combine(layout.layout.isTextFragment)
+      }
+      return hasher.finalize()
+    }
+
     func isEqual(to other: any TextLayoutCollection) -> Bool {
       base == (other as? LiveTextLayoutCollection)?.base
     }

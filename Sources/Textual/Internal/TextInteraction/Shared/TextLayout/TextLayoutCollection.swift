@@ -3,6 +3,7 @@
 
   protocol TextLayoutCollection {
     var layouts: [any TextLayout] { get }
+    var identity: Int { get }
 
     func isEqual(to other: any TextLayoutCollection) -> Bool
     func needsPositionReconciliation(with other: any TextLayoutCollection) -> Bool
@@ -18,6 +19,10 @@
 
     var layouts: [any TextLayout] {
       base.layouts
+    }
+
+    var identity: Int {
+      base.identity
     }
 
     func isEqual(to other: any TextLayoutCollection) -> Bool {

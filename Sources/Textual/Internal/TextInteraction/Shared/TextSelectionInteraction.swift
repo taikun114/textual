@@ -25,26 +25,29 @@ struct TextSelectionInteraction: ViewModifier {
           content
             .overlayTextLayoutCollection { layoutCollection in
               Color.clear
-                .task(id: AnyTextLayoutCollection(layoutCollection)) {
+                .task(id: layoutCollection.identity) {
+                  // 選択が許可されていない（ストリーミング中など）場合は、
+                  // レイアウト情報の同期処理自体をスキップして負荷を下げる
+                  guard textSelection.allowsSelection else { return }
+
                   do {
-                     // ストリーミング完了時に複数のブロックが一斉に更新されるのを防ぐため、分散させる
-                     let jitterSeconds = Double.random(in: 0...0.5)
-                     try await Task.sleep(nanoseconds: UInt64((0.4 + jitterSeconds) * 1_000_000_000))
-                     
-                     guard textSelection.allowsSelection else { return }
-                     
-                     // メインActor上で実行するが、さらに次のRunLoopに逃がすことで
-                     // SwiftUI の「同じフレームでの更新」エラーを物理的に回避する
-                     await MainActor.run {
-                       DispatchQueue.main.async {
-                         if !Task.isCancelled {
-                           model.setCoordinator(coordinator)
-                           model.setLayoutCollection(layoutCollection)
-                         }
-                       }
-                     }
+                    // レイアウト計算が落ち着くのを待つための短いディレイ。
+                    // ストリーミング完了時の集中を避けるため、即時更新を避ける
+                    try await Task.sleep(nanoseconds: 100_000_000) // 0.1秒
+                    
+                    if !Task.isCancelled {
+                      await MainActor.run {
+                        // 文字選択が無効化されていないか再確認
+                        guard !Task.isCancelled, textSelection.allowsSelection else { return }
+                        
+                        // setLayoutCollection内部で自動的に重複チェックが行われるため
+                        // ここでは無条件に呼び出して、モデル側に判断を任せる
+                        model.setCoordinator(coordinator)
+                        model.setLayoutCollection(layoutCollection)
+                      }
+                    }
                   } catch {
-                    // キャンセル時は無視
+                     // キャンセル
                   }
                 }
             }

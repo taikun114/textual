@@ -6,6 +6,10 @@
       []
     }
 
+    var identity: Int {
+      0
+    }
+
     func isEqual(to other: any TextLayoutCollection) -> Bool {
       other.layouts.isEmpty
     }

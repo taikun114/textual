@@ -34,50 +34,54 @@ struct WithInlineStyle<Content: View>: View {
 
   var body: some View {
     content(output ?? AttributedString())
-      .onChange(of: Tuple(input, style, environment), initial: true) { _, newValue in
-        resolve(
-          attributedString: newValue.values.0,
-          style: newValue.values.1,
-          in: newValue.values.2
-        )
+      .task(id: {
+        var hasher = Hasher()
+        hasher.combine(input)
+        hasher.combine(style)
+        hasher.combine(environment)
+        return hasher.finalize()
+      }()) {
+        let input = input
+        let style = style
+        let environment = environment
+        
+        // 属性の適用は重い処理になる可能性があるため、バックグラウンドスレッドで実行
+        let resolved = await Task.detached(priority: .userInitiated) {
+          var output = input
+
+          for run in input.runs {
+            var attributes = AttributeContainer()
+
+            if let intent = run.inlinePresentationIntent {
+              if intent.contains(.code) {
+                style.code.apply(in: &attributes, environment: environment)
+              }
+
+              if intent.contains(.emphasized) {
+                style.emphasis.apply(in: &attributes, environment: environment)
+              }
+
+              if intent.contains(.stronglyEmphasized) {
+                style.strong.apply(in: &attributes, environment: environment)
+              }
+
+              if intent.contains(.strikethrough) {
+                style.strikethrough.apply(in: &attributes, environment: environment)
+              }
+            }
+
+            if run.link != nil {
+              style.link.apply(in: &attributes, environment: environment)
+            }
+
+            output[run.range].mergeAttributes(attributes, mergePolicy: .keepNew)
+          }
+          return output
+        }.value
+        
+        if !Task.isCancelled {
+          self.output = resolved
+        }
       }
-  }
-
-  private func resolve(
-    attributedString: AttributedString,
-    style: InlineStyle,
-    in environment: TextEnvironmentValues
-  ) {
-    var output = attributedString
-
-    for run in attributedString.runs {
-      var attributes = AttributeContainer()
-
-      if let intent = run.inlinePresentationIntent {
-        if intent.contains(.code) {
-          style.code.apply(in: &attributes, environment: environment)
-        }
-
-        if intent.contains(.emphasized) {
-          style.emphasis.apply(in: &attributes, environment: environment)
-        }
-
-        if intent.contains(.stronglyEmphasized) {
-          style.strong.apply(in: &attributes, environment: environment)
-        }
-
-        if intent.contains(.strikethrough) {
-          style.strikethrough.apply(in: &attributes, environment: environment)
-        }
-      }
-
-      if run.link != nil {
-        style.link.apply(in: &attributes, environment: environment)
-      }
-
-      output[run.range].mergeAttributes(attributes, mergePolicy: .keepNew)
-    }
-
-    self.output = output
   }
 }

@@ -32,7 +32,7 @@ struct WithAttachments<Content: View>: View {
 
   var body: some View {
     content(model.resolvedAttributedString ?? attributedString)
-      .task(id: attributedString) {
+      .task(id: String(attributedString.characters[...]).hashValue) {
         await model.resolveAttachments(
           in: attributedString,
           imageAttachmentLoader: imageAttachmentLoader,

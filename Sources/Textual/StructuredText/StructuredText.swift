@@ -154,7 +154,7 @@ extension StructuredText {
     private let syntaxExtensions: [AttributedStringMarkdownParser.SyntaxExtension]
     private let isStreaming: Bool
 
-    @State private var blocks: [String] = []
+    @State private var model = StreamingModel()
 
     public init(
       markdown: String,
@@ -166,33 +166,67 @@ extension StructuredText {
       self.baseURL = baseURL
       self.syntaxExtensions = syntaxExtensions
       self.isStreaming = isStreaming
-      
-      // Initialize blocks immediately to prevent a one-frame flicker of empty content.
-      self._blocks = State(initialValue: MarkdownBlockSplitter.split(markdown))
     }
 
     public var body: some View {
       VStack(alignment: .leading, spacing: 0) {
-        ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
-          // 各ブロックは独自のTextSelectionCoordinationを持たず、親のStreamingが管理する
-          var blockView = StructuredText(markdown: block, baseURL: baseURL, syntaxExtensions: syntaxExtensions)
-          let _ = { blockView.managesOwnSelection = false }()
-          blockView
+        ForEach(Array(model.blocks.enumerated()), id: \.offset) { _, block in
+          BlockView(
+            markdown: block,
+            baseURL: baseURL,
+            syntaxExtensions: syntaxExtensions
+          )
         }
       }
-      // Streaming全体で1つのTextSelectionCoordinationを共有
       .modifier(TextSelectionCoordination())
       .task(id: markdown) {
-        // 分割処理自体をバックグラウンドへ
+        await model.process(markdown: markdown, isStreaming: isStreaming)
+      }
+    }
+
+    @MainActor @Observable final class StreamingModel {
+      var blocks: [String] = []
+      private var lastUpdateTime: Date = .distantPast
+
+      func process(markdown: String, isStreaming: Bool) async {
+        let now = Date()
+        let interval = isStreaming ? 0.1 : 0.0 // ストリーミング中は 0.1秒間隔
+
+        if now.timeIntervalSince(lastUpdateTime) < interval {
+          // 前回の更新から間もない場合は、最後の一回を確実に拾うために少し待つ
+          try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+        }
+
+        if Task.isCancelled { return }
+
         let result = await Task.detached(priority: .userInitiated) {
           MarkdownBlockSplitter.split(markdown)
         }.value
-        
+
         if !Task.isCancelled {
           if self.blocks != result {
             self.blocks = result
+            self.lastUpdateTime = Date()
           }
         }
+      }
+    }
+
+    // ブロック単位の描画を最適化するためのEquatableなラッパーView
+    private struct BlockView: View, Equatable {
+      let markdown: String
+      let baseURL: URL?
+      let syntaxExtensions: [AttributedStringMarkdownParser.SyntaxExtension]
+
+      nonisolated static func == (lhs: BlockView, rhs: BlockView) -> Bool {
+        return lhs.markdown == rhs.markdown &&
+               lhs.baseURL == rhs.baseURL
+      }
+
+      var body: some View {
+        var blockView = StructuredText(markdown: markdown, baseURL: baseURL, syntaxExtensions: syntaxExtensions)
+        let _ = { blockView.managesOwnSelection = false }()
+        return blockView
       }
     }
   }

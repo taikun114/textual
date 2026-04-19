@@ -32,20 +32,19 @@ struct HighlightedTextFragment: View {
   var body: some View {
     TextFragment(model.highlightedCode ?? AttributedString(content))
       .foregroundStyle(theme.foregroundColor)
-      .task(id: Tuple(content, isSyntaxHighlightingEnabled)) {
-        await model.tokenize(
+      .task(id: {
+        var hasher = Hasher()
+        hasher.combine(String(content.characters[...]))
+        hasher.combine(isSyntaxHighlightingEnabled)
+        hasher.combine(textEnvironment)
+        return hasher.finalize()
+      }()) {
+        await model.process(
           content: content,
           languageHint: languageHint,
-          isEnabled: isSyntaxHighlightingEnabled
-        )
-      }
-      .onChange(of: Tuple(model.tokens, textEnvironment)) { _, newValue in
-        guard isSyntaxHighlightingEnabled else { return }
-        model.highlight(
-          tokens: newValue.values.0,
-          presentationIntent: content.presentationIntent,
+          isEnabled: isSyntaxHighlightingEnabled,
           using: theme,
-          environment: newValue.values.1
+          environment: textEnvironment
         )
       }
   }
@@ -53,61 +52,54 @@ struct HighlightedTextFragment: View {
 
 extension HighlightedTextFragment {
   @MainActor @Observable final class Model {
-    var tokens: [CodeToken] = []
-    var highlightedCode: AttributedString?
+    var highlightedCode: AttributedString? = nil
 
-    func tokenize(
+    func process(
       content: AttributedSubstring,
       languageHint: String?,
-      isEnabled: Bool
+      isEnabled: Bool,
+      using theme: StructuredText.HighlighterTheme,
+      environment: TextEnvironmentValues
     ) async {
-      // Skip processing when syntax highlighting is disabled
+      // ハイライト無効時はクリアして終了
       guard isEnabled else {
-        self.tokens = []
         self.highlightedCode = nil
         return
       }
 
       let code = String(content.characters[...])
-      tokens = [CodeToken(content: code, type: .plain)]
+      var tokens = [CodeToken(content: code, type: .plain)]
 
       if let tokenizer = CodeTokenizer.shared, let languageHint {
         tokens = await tokenizer.tokenize(code: code, language: languageHint)
       }
-    }
 
-    func highlight(
-      tokens: [CodeToken],
-      presentationIntent: PresentationIntent?,
-      using theme: StructuredText.HighlighterTheme,
-      environment: TextEnvironmentValues
-    ) {
-      // Skip if there are no tokens (or highlighting is disabled)
-      guard !tokens.isEmpty else {
-        self.highlightedCode = nil
-        return
-      }
+      // トライアル: ここでタスクがキャンセルされていたら重いハイライト処理をスキップ
+      if Task.isCancelled { return }
 
+      // --- ハイライト処理 ---
       var attributes = AttributeContainer()
-      // Re-apply the presentation intent for pasteboard formatters
-      attributes.presentationIntent = presentationIntent
+      attributes.presentationIntent = content.presentationIntent
       ForegroundColorProperty(theme.foregroundColor)
         .apply(in: &attributes, environment: environment)
-      var highlightedCode = AttributedString()
+
+      var result = AttributedString()
 
       for token in tokens {
-        var content = AttributedString(token.content)
+        var tokenContent = AttributedString(token.content)
         var tokenAttributes = attributes
 
         if let tokenProperties = theme.tokenProperties[token.type] {
           tokenProperties.apply(in: &tokenAttributes, environment: environment)
         }
 
-        content.mergeAttributes(tokenAttributes)
-        highlightedCode.append(content)
+        tokenContent.mergeAttributes(tokenAttributes)
+        result.append(tokenContent)
       }
 
-      self.highlightedCode = highlightedCode
+      if !Task.isCancelled {
+        self.highlightedCode = result
+      }
     }
   }
 }
