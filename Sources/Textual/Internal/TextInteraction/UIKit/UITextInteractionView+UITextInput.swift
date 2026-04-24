@@ -27,8 +27,28 @@
       get { model.selectedRange.map(TextRangeBox.init) }
       set {
         let rangeBox = newValue as? TextRangeBox
-        model.selectedRange = rangeBox?.wrappedValue
-        logger.debug("selectedTextRange = \(newValue)")
+        let newRange = rangeBox?.wrappedValue
+        
+#if os(visionOS)
+        if let range = newRange {
+          if let anchor = selectionAnchor {
+            // Expand the range from anchor to the new range's edges
+            let start = Swift.min(anchor, range.start)
+            let end = Swift.max(anchor, range.end)
+            model.selectedRange = TextRange(start: start, end: end)
+          } else {
+            // First selection in this interaction, set the anchor
+            selectionAnchor = range.start
+            model.selectedRange = range
+          }
+        } else {
+          selectionAnchor = nil
+          model.selectedRange = nil
+        }
+#else
+        model.selectedRange = newRange
+#endif
+        logger.debug("selectedTextRange = \(String(describing: newValue))")
       }
     }
 
@@ -139,6 +159,19 @@
     ) -> UITextRange? {
       guard let pos = self.position(from: position, in: direction, offset: 1) else { return nil }
       guard let p1 = position as? TextPositionBox, let p2 = pos as? TextPositionBox else { return nil }
+      
+      if let currentRange = model.selectedRange {
+        if p1.wrappedValue == currentRange.start {
+          let minPos = Swift.min(p2.wrappedValue, currentRange.end)
+          let maxPos = Swift.max(p2.wrappedValue, currentRange.end)
+          return TextRangeBox(TextRange(start: minPos, end: maxPos))
+        } else if p1.wrappedValue == currentRange.end {
+          let minPos = Swift.min(currentRange.start, p2.wrappedValue)
+          let maxPos = Swift.max(currentRange.start, p2.wrappedValue)
+          return TextRangeBox(TextRange(start: minPos, end: maxPos))
+        }
+      }
+      
       let minPos = Swift.min(p1.wrappedValue, p2.wrappedValue)
       let maxPos = Swift.max(p1.wrappedValue, p2.wrappedValue)
       return TextRangeBox(TextRange(start: minPos, end: maxPos))

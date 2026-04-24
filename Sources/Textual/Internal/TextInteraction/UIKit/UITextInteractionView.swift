@@ -29,6 +29,7 @@
     private let selectionInteraction: UITextInteraction
 
     private var codeBlockPanGesture: UIPanGestureRecognizer?
+    var selectionAnchor: TextPosition?
     private weak var targetScrollView: UIScrollView?
     private var initialContentOffset: CGPoint = .zero
 
@@ -241,10 +242,12 @@
     func interactionWillBegin(_ interaction: UITextInteraction) {
       logger.debug("interactionWillBegin")
       _ = self.becomeFirstResponder()
+      selectionAnchor = nil
     }
 
     func interactionDidEnd(_ interaction: UITextInteraction) {
       logger.debug("interactionDidEnd")
+      selectionAnchor = nil
     }
   }
 
