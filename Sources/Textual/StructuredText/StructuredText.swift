@@ -122,9 +122,9 @@ public struct StructuredText: View {
     WithAttachments(attributedString) {
       BlockContent(content: $0)
         .coordinateSpace(.textContainer)
-        .modifier(TextSelectionInteraction())
         .if(managesOwnSelection) {
-          $0.modifier(TextSelectionCoordination())
+          $0.modifier(TextSelectionInteraction())
+            .modifier(TextSelectionCoordination())
         }
         .accessibilityElement(children: .contain)
     }
@@ -178,6 +178,7 @@ extension StructuredText {
           )
         }
       }
+      .modifier(TextSelectionInteraction())
       .modifier(TextSelectionCoordination())
       .task(id: markdown) {
         await model.process(markdown: markdown, isStreaming: isStreaming)

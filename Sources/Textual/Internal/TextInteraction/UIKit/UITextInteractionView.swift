@@ -53,12 +53,10 @@
     }
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-      for exclusionRect in exclusionRects {
-        if exclusionRect.contains(point) {
-          return false
-        }
+      if let selectedRange = model.selectedRange, !selectedRange.isCollapsed {
+        return true
       }
-      return super.point(inside: point, with: event)
+      return model.isPointOverText(point)
     }
 
     override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
@@ -100,6 +98,7 @@
       }
 
       let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
+      tapGesture.delegate = self
       addGestureRecognizer(tapGesture)
 
       let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handleCodeBlockPan(_:)))
@@ -122,9 +121,19 @@
       let location = gesture.location(in: self)
       if let url = model.url(for: location) {
         openURL(url)
-      } else {
-        model.selectedRange = nil
+        return
       }
+
+      if let selectedRange = model.selectedRange, !selectedRange.isCollapsed {
+        let rects = model.selectionRects(for: selectedRange)
+        for rectBox in rects {
+          if rectBox.rect.insetBy(dx: -20, dy: -20).contains(location) {
+            return
+          }
+        }
+      }
+
+      model.selectedRange = nil
     }
 
     @objc private func share(_ sender: Any?) {

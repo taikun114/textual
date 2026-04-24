@@ -83,8 +83,17 @@
       in direction: UITextLayoutDirection,
       offset: Int
     ) -> UITextPosition? {
-      logger.error("position(from:in:offset:) is not implemented")
-      return nil
+      guard let positionBox = position as? TextPositionBox else { return nil }
+      let sign: Int
+      switch direction {
+      case .right, .down: sign = 1
+      case .left, .up: sign = -1
+      @unknown default: sign = 1
+      }
+      return model.position(
+        from: positionBox.wrappedValue,
+        offset: offset * sign
+      ).map(TextPositionBox.init)
     }
 
     func compare(_ position: UITextPosition, to other: UITextPosition) -> ComparisonResult {
@@ -113,16 +122,26 @@
       within range: UITextRange,
       farthestIn direction: UITextLayoutDirection
     ) -> UITextPosition? {
-      logger.error("position(within:farthestIn:) is not implemented")
-      return nil
+      guard let rangeBox = range as? TextRangeBox else { return nil }
+      switch direction {
+      case .right, .down:
+        return TextPositionBox(rangeBox.wrappedEnd)
+      case .left, .up:
+        return TextPositionBox(rangeBox.wrappedStart)
+      @unknown default:
+        return nil
+      }
     }
 
     func characterRange(
       byExtending position: UITextPosition,
       in direction: UITextLayoutDirection
     ) -> UITextRange? {
-      logger.error("characterRange(byExtending:in:) is not implemented")
-      return nil
+      guard let pos = self.position(from: position, in: direction, offset: 1) else { return nil }
+      guard let p1 = position as? TextPositionBox, let p2 = pos as? TextPositionBox else { return nil }
+      let minPos = Swift.min(p1.wrappedValue, p2.wrappedValue)
+      let maxPos = Swift.max(p1.wrappedValue, p2.wrappedValue)
+      return TextRangeBox(TextRange(start: minPos, end: maxPos))
     }
 
     func baseWritingDirection(

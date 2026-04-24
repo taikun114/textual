@@ -14,14 +14,26 @@
 
     var identity: Int {
       var hasher = Hasher()
-      for layout in base {
-        hasher.combine(layout.layout.isTextFragment)
+      for layout in layouts {
+        if let liveLayout = layout as? LiveTextLayout {
+          hasher.combine(liveLayout.base.isTextFragment)
+          hasher.combine(liveLayout.origin.x)
+          hasher.combine(liveLayout.origin.y)
+        }
       }
       return hasher.finalize()
     }
 
     func isEqual(to other: any TextLayoutCollection) -> Bool {
-      base == (other as? LiveTextLayoutCollection)?.base
+      guard let otherLive = other as? LiveTextLayoutCollection else { return false }
+      if base != otherLive.base { return false }
+      guard layouts.count == otherLive.layouts.count else { return false }
+      for (a, b) in zip(layouts, otherLive.layouts) {
+        if let aLive = a as? LiveTextLayout, let bLive = b as? LiveTextLayout {
+          if aLive.origin != bLive.origin { return false }
+        }
+      }
+      return true
     }
 
     func needsPositionReconciliation(with other: any TextLayoutCollection) -> Bool {
