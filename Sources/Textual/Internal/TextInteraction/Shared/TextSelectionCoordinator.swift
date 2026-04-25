@@ -14,8 +14,10 @@ import SwiftUI
 
 #if TEXTUAL_ENABLE_TEXT_SELECTION
   @Observable
-  final class TextSelectionCoordinator {
+  public final class TextSelectionCoordinator {
     private var models: [WeakBox<TextSelectionModel>] = []
+
+    public init() {}
 
     func register(_ model: TextSelectionModel) {
       models.append(WeakBox(model))
@@ -30,6 +32,14 @@ import SwiftUI
       compact()
     }
 
+    public func deselectAll() {
+      // Clear selection in all models
+      for weakModel in models {
+        weakModel.wrapped?.selectedRange = nil
+      }
+      compact()
+    }
+
     private func compact() {
       models.removeAll {
         $0.wrapped == nil
@@ -38,14 +48,21 @@ import SwiftUI
   }
 #endif
 
-struct TextSelectionCoordination: ViewModifier {
+public struct TextSelectionCoordination: ViewModifier {
   #if TEXTUAL_ENABLE_TEXT_SELECTION
-    @State private var coordinator = TextSelectionCoordinator()
+    @Environment(TextSelectionCoordinator.self) private var existingCoordinator: TextSelectionCoordinator?
+    @State private var localCoordinator = TextSelectionCoordinator()
   #endif
 
-  func body(content: Content) -> some View {
+  public init() {}
+
+  public func body(content: Content) -> some View {
     #if TEXTUAL_ENABLE_TEXT_SELECTION
-      content.environment(coordinator)
+      if let existingCoordinator {
+        content
+      } else {
+        content.environment(localCoordinator)
+      }
     #else
       content
     #endif
