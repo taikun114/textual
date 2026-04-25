@@ -64,9 +64,16 @@ extension Text {
     attachmentSizes: [AttachmentKey: CGSize],
     in environment: TextEnvironmentValues
   ) {
+    // If no attachments are present, use the high-performance native initializer.
+    // This avoids expensive Text concatenation and reduces view hierarchy depth.
+    if attachmentSizes.isEmpty {
+      self = Text(AttributedString(attributedString[attributedString.startIndex..<attributedString.endIndex]))
+      return
+    }
+
     let textValues = attributedString.runs.map { run in
       var text: Text
-
+      
       var runEnvironment = environment
       runEnvironment.font = run.font ?? environment.font
 

@@ -12,6 +12,8 @@ import SwiftUI
 extension StructuredText {
   struct BlockVStack<Content: View>: View {
     @Environment(\.multilineTextAlignment) private var textAlignment
+    @Environment(\.listItemSpacingEnabled) private var listItemSpacingEnabled
+    @Environment(\.resolvedListItemSpacing) private var resolvedListItemSpacing
 
     private let content: Content
 
@@ -20,12 +22,12 @@ extension StructuredText {
     }
 
     var body: some View {
-      Group(subviews: content) { children in
-        BlockVStackLayout(textAlignment: textAlignment) {
-          ForEach(children) {
-            BlockLayoutView($0)
-          }
-        }
+      BlockVStackLayout(
+        textAlignment: textAlignment,
+        listItemSpacingEnabled: listItemSpacingEnabled,
+        resolvedListItemSpacing: resolvedListItemSpacing
+      ) {
+        content
       }
     }
   }
@@ -34,29 +36,6 @@ extension StructuredText {
 extension StructuredText {
   struct BlockAlignmentKey: LayoutValueKey {
     static let defaultValue: TextAlignment? = nil
-  }
-
-  fileprivate struct BlockLayoutView<Content: View>: View {
-    @Environment(\.listItemSpacingEnabled) private var listItemSpacingEnabled
-    @Environment(\.resolvedListItemSpacing) private var resolvedListItemSpacing
-
-    @State private var blockSpacing = BlockSpacing()
-
-    private let content: Content
-
-    init(_ content: Content) {
-      self.content = content
-    }
-
-    var body: some View {
-      // Read the block spacing preference and apply it as a layout value
-      content
-        .onPreferenceChange(BlockSpacingKey.self) { @MainActor value in
-          // Override with the resolved list item spacing if enabled
-          blockSpacing = listItemSpacingEnabled ? resolvedListItemSpacing : value
-        }
-        .layoutValue(key: BlockSpacingKey.self, value: blockSpacing)
-    }
   }
 
   fileprivate struct BlockVStackLayout: Layout {
@@ -69,14 +48,20 @@ extension StructuredText {
     }
 
     let textAlignment: TextAlignment
+    let listItemSpacingEnabled: Bool
+    let resolvedListItemSpacing: BlockSpacing
 
     func makeCache(subviews: Subviews) -> Cache {
       return Cache(
         spacings: subviews.indices.dropLast().map { index in
           let current = subviews[index]
           let next = subviews[index + 1]
-          let currentBottom = current[BlockSpacingKey.self].bottom
-          let nextTop = next[BlockSpacingKey.self].top
+          
+          let currentSpacing = listItemSpacingEnabled ? resolvedListItemSpacing : current[BlockSpacingKey.self]
+          let nextSpacing = listItemSpacingEnabled ? resolvedListItemSpacing : next[BlockSpacingKey.self]
+          
+          let currentBottom = currentSpacing.bottom
+          let nextTop = nextSpacing.top
 
           // Take the maximum block spacing, otherwise the preferred view spacing
           return [currentBottom, nextTop].compactMap(\.self).max()
