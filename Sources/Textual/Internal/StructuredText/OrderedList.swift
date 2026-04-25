@@ -9,6 +9,7 @@ import SwiftUI
 extension StructuredText {
   struct OrderedList: View {
     @Environment(\.listItemSpacing) private var listItemSpacing
+    @Environment(\.listSpacing) private var listSpacing
     @Environment(\.textEnvironment) private var textEnvironment
 
     @State private var markerWidth: CGFloat?

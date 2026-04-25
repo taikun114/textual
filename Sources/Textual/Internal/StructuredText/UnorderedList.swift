@@ -3,6 +3,7 @@ import SwiftUI
 extension StructuredText {
   struct UnorderedList: View {
     @Environment(\.listItemSpacing) private var listItemSpacing
+    @Environment(\.listSpacing) private var listSpacing
     @Environment(\.textEnvironment) private var textEnvironment
 
     private let intent: PresentationIntent.IntentType?

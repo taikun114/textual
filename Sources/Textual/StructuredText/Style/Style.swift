@@ -40,5 +40,11 @@ extension StructuredText {
     var tableCellStyle: TableCellStyle { get }
     /// The style used for thematic breaks.
     var thematicBreakStyle: ThematicBreakStyle { get }
+    /// The spacing used for the list container.
+    var listSpacing: FontScaled<StructuredText.BlockSpacing> { get }
   }
+}
+
+extension StructuredText.Style {
+  public var listSpacing: FontScaled<StructuredText.BlockSpacing> { .fontScaled(top: 0, bottom: 0) }
 }

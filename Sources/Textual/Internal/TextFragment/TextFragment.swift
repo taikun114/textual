@@ -44,7 +44,7 @@ struct TextFragment<Content: AttributedStringProtocol>: View {
       }
       .task(id: {
         var hasher = Hasher()
-        hasher.combine(String(content.characters[...]))
+        hasher.combine(content)
         hasher.combine(textEnvironment)
         return hasher.finalize()
       }()) {

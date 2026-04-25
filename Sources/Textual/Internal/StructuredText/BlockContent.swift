@@ -10,6 +10,8 @@ extension StructuredText {
       self.content = content
     }
 
+    @Environment(\.listSpacing) private var listSpacing
+
     var body: some View {
       let runs = content.blockRuns(parent: parent)
 
@@ -17,7 +19,21 @@ extension StructuredText {
         ForEach(runs.indices, id: \.self) { index in
           let run = runs[index]
           Block(intent: run.intent, content: content[run.range])
+            .textual.blockSpacing(spacing(for: run.intent))
         }
+      }
+    }
+
+    private func spacing(for intent: PresentationIntent.IntentType?) -> FontScaled<StructuredText.BlockSpacing> {
+      switch intent?.kind {
+      case .orderedList, .unorderedList:
+        return listSpacing
+      case .table:
+        return .fontScaled(top: 0.8, bottom: 0.8)
+      case .header:
+        return .fontScaled(top: 0) // Headings handle their own padding in SimpleStyle
+      default:
+        return .fontScaled(top: 0.8, bottom: 0.8)
       }
     }
   }

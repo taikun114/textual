@@ -124,6 +124,13 @@ extension TextualNamespace where Base: View {
     base.environment(\.listItemSpacing, listItemSpacing)
   }
 
+  /// Sets the spacing used for the list container in ``StructuredText``.
+  public func listSpacing(
+    _ listSpacing: FontScaled<StructuredText.BlockSpacing>
+  ) -> some View {
+    base.environment(\.listSpacing, listSpacing)
+  }
+
   /// Sets the custom emoji properties.
   public func emojiProperties(_ emojiProperties: EmojiProperties) -> some View {
     base.environment(\.emojiProperties, emojiProperties)
@@ -319,5 +326,6 @@ extension TextualNamespace where Base: View {
       .environment(\.tableStyle, style.tableStyle)
       .environment(\.tableCellStyle, style.tableCellStyle)
       .environment(\.thematicBreakStyle, style.thematicBreakStyle)
+      .environment(\.listSpacing, style.listSpacing)
   }
 }

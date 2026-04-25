@@ -169,10 +169,10 @@ extension StructuredText {
     }
 
     public var body: some View {
-      VStack(alignment: .leading, spacing: 0) {
+      BlockVStack {
         ForEach(Array(model.blocks.enumerated()), id: \.offset) { _, block in
           BlockView(
-            markdown: block,
+            block: block,
             baseURL: baseURL,
             syntaxExtensions: syntaxExtensions
           )
@@ -186,7 +186,7 @@ extension StructuredText {
     }
 
     @MainActor @Observable final class StreamingModel {
-      var blocks: [String] = []
+      var blocks: [BlockInfo] = []
       private var lastUpdateTime: Date = .distantPast
 
       func process(markdown: String, isStreaming: Bool) async {
@@ -215,19 +215,35 @@ extension StructuredText {
 
     // ブロック単位の描画を最適化するためのEquatableなラッパーView
     private struct BlockView: View, Equatable {
-      let markdown: String
+      let block: BlockInfo
       let baseURL: URL?
       let syntaxExtensions: [AttributedStringMarkdownParser.SyntaxExtension]
 
+      @Environment(\.listSpacing) private var listSpacing
+
       nonisolated static func == (lhs: BlockView, rhs: BlockView) -> Bool {
-        return lhs.markdown == rhs.markdown &&
+        return lhs.block == rhs.block &&
                lhs.baseURL == rhs.baseURL
       }
 
       var body: some View {
-        var blockView = StructuredText(markdown: markdown, baseURL: baseURL, syntaxExtensions: syntaxExtensions)
+        var blockView = StructuredText(markdown: block.markdown, baseURL: baseURL, syntaxExtensions: syntaxExtensions)
         let _ = { blockView.managesOwnSelection = false }()
         return blockView
+          .textual.blockSpacing(spacing(for: block.kind))
+      }
+
+      private func spacing(for kind: BlockKind) -> FontScaled<BlockSpacing> {
+        switch kind {
+        case .list:
+          return listSpacing
+        case .table:
+          return .fontScaled(top: 0.8, bottom: 0.8)
+        case .header:
+          return .fontScaled(top: 0)
+        default:
+          return .fontScaled(top: 0.8, bottom: 0.8)
+        }
       }
     }
   }
