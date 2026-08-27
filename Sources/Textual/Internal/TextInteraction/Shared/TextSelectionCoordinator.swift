@@ -58,7 +58,7 @@ public struct TextSelectionCoordination: ViewModifier {
 
   public func body(content: Content) -> some View {
     #if TEXTUAL_ENABLE_TEXT_SELECTION
-      if let existingCoordinator {
+      if existingCoordinator != nil {
         content
       } else {
         content.environment(localCoordinator)

@@ -17,7 +17,7 @@ struct WithAttachments<Content: View>: View {
   @Environment(\.emojiAttachmentLoader) private var emojiAttachmentLoader
   @Environment(\.colorEnvironment) private var colorEnvironment
 
-  @State private var model = Model()
+  @State private var resolvedAttributedString: AttributedString?
 
   private let attributedString: AttributedString
   private let content: (AttributedString) -> Content
@@ -31,9 +31,9 @@ struct WithAttachments<Content: View>: View {
   }
 
   var body: some View {
-    content(model.resolvedAttributedString ?? attributedString)
+    content(resolvedAttributedString ?? attributedString)
       .task(id: String(attributedString.characters[...]).hashValue) {
-        await model.resolveAttachments(
+        resolvedAttributedString = await resolveAttachments(
           in: attributedString,
           imageAttachmentLoader: imageAttachmentLoader,
           emojiAttachmentLoader: emojiAttachmentLoader,
@@ -41,75 +41,57 @@ struct WithAttachments<Content: View>: View {
         )
       }
   }
-}
 
-extension WithAttachments {
-  @MainActor @Observable final class Model {
-    var resolvedAttributedString: AttributedString?
+  private func resolveAttachments(
+    in attributedString: AttributedString,
+    imageAttachmentLoader: any AttachmentLoader,
+    emojiAttachmentLoader: any AttachmentLoader,
+    environment: ColorEnvironmentValues
+  ) async -> AttributedString {
+    guard attributedString.containsValues(for: [\.imageURL, \.textual.emojiURL]) else {
+      return attributedString
+    }
 
-    func resolveAttachments(
-      in attributedString: AttributedString,
-      imageAttachmentLoader: any AttachmentLoader,
-      emojiAttachmentLoader: any AttachmentLoader,
-      environment: ColorEnvironmentValues
-    ) async {
-      guard attributedString.containsValues(for: [\.imageURL, \.textual.emojiURL]) else {
-        return
-      }
+    var attachments: [AnyAttachment] = []
+    var ranges: [Range<AttributedString.Index>] = []
 
-      var attachments: [AnyAttachment] = []
-      var ranges: [Range<AttributedString.Index>] = []
-
-      await withTaskGroup(
-        of: (AnyAttachment?, Range<AttributedString.Index>).self
-      ) { group in
-        for run in attributedString.runs {
-          if let imageURL = run.imageURL {
-            group.addTask {
-              let attachment = try? await imageAttachmentLoader.attachment(
-                for: imageURL,
-                text: String(attributedString[run.range].characters[...]),
-                environment: environment
-              )
-              return (attachment.map(AnyAttachment.init), run.range)
-            }
-          } else if let emojiURL = run.textual.emojiURL {
-            group.addTask {
-              let attachment = try? await emojiAttachmentLoader.attachment(
-                for: emojiURL,
-                text: String(attributedString[run.range].characters[...]),
-                environment: environment
-              )
-              return (attachment.map(AnyAttachment.init), run.range)
-            }
+    await withTaskGroup(
+      of: (AnyAttachment?, Range<AttributedString.Index>).self
+    ) { group in
+      for run in attributedString.runs {
+        if let imageURL = run.imageURL {
+          group.addTask {
+            let attachment = try? await imageAttachmentLoader.attachment(
+              for: imageURL,
+              text: String(attributedString[run.range].characters[...]),
+              environment: environment
+            )
+            return (attachment.map(AnyAttachment.init), run.range)
+          }
+        } else if let emojiURL = run.textual.emojiURL {
+          group.addTask {
+            let attachment = try? await emojiAttachmentLoader.attachment(
+              for: emojiURL,
+              text: String(attributedString[run.range].characters[...]),
+              environment: environment
+            )
+            return (attachment.map(AnyAttachment.init), run.range)
           }
         }
-
-        for await (attachment, range) in group {
-          guard let attachment else { continue }
-
-          attachments.append(attachment)
-          ranges.append(range)
-        }
       }
 
-      resolveAttachmentsFinished(
-        attributedString: attributedString,
-        attachments: Array(zip(ranges, attachments))
-      )
-    }
+      for await (attachment, range) in group {
+        guard let attachment else { continue }
 
-    private func resolveAttachmentsFinished(
-      attributedString: AttributedString,
-      attachments: [(Range<AttributedString.Index>, AnyAttachment)]
-    ) {
-      var attributedString = attributedString
-
-      for (range, attachment) in attachments {
-        attributedString[range].textual.attachment = attachment
+        attachments.append(attachment)
+        ranges.append(range)
       }
-
-      self.resolvedAttributedString = attributedString
     }
+
+    var result = attributedString
+    for (range, attachment) in zip(ranges, attachments) {
+      result[range].textual.attachment = attachment
+    }
+    return result
   }
 }
