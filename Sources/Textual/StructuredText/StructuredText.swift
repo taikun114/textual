@@ -102,7 +102,7 @@ import SwiftUI
 /// When you need to parse something other than Markdown, use ``init(_:parser:)`` with a custom
 /// ``MarkupParser`` implementation.
 public struct StructuredText: View {
-  @State private var attributedString = AttributedString()
+  @State private var attributedString: AttributedString
 
   private let markup: String
   private let parser: any MarkupParser
@@ -116,6 +116,8 @@ public struct StructuredText: View {
   public init(_ markup: String, parser: any MarkupParser) {
     self.markup = markup
     self.parser = parser
+    // 初回表示時の空文字フレームによるチラつきを防ぐため、初期値を同期的にパースしてセット
+    self._attributedString = State(initialValue: (try? parser.attributedString(for: markup)) ?? .init())
   }
 
   public var body: some View {
@@ -170,18 +172,22 @@ extension StructuredText {
 
     public var body: some View {
       BlockVStack {
-        ForEach(Array(model.blocks.enumerated()), id: \.offset) { _, block in
-          BlockView(
-            block: block,
-            baseURL: baseURL,
-            syntaxExtensions: syntaxExtensions
-          )
+        ForEach(model.blocks) { block in
+          BlockView(block: block)
         }
+      }
+      .transaction { transaction in
+        transaction.animation = nil
       }
       .modifier(TextSelectionInteraction())
       .modifier(TextSelectionCoordination())
       .task(id: markdown) {
-        await model.process(markdown: markdown, isStreaming: isStreaming)
+        await model.process(
+          markdown: markdown,
+          baseURL: baseURL,
+          syntaxExtensions: syntaxExtensions,
+          isStreaming: isStreaming
+        )
       }
     }
 
@@ -189,26 +195,68 @@ extension StructuredText {
       var blocks: [BlockInfo] = []
       private var lastUpdateTime: Date = .distantPast
 
-      func process(markdown: String, isStreaming: Bool) async {
-        let now = Date()
-        let interval = isStreaming ? 0.1 : 0.0 // ストリーミング中は 0.1秒間隔
+      func process(
+        markdown: String,
+        baseURL: URL?,
+        syntaxExtensions: [AttributedStringMarkdownParser.SyntaxExtension],
+        isStreaming: Bool
+      ) async {
+        let interval: TimeInterval = isStreaming ? 0.08 : 0.0 // ストリーミング中は 80ms 間隔でスロットリング
 
-        if now.timeIntervalSince(lastUpdateTime) < interval {
-          // 前回の更新から間もない場合は、最後の一回を確実に拾うために少し待つ
-          try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+        let now = Date()
+        let elapsed = now.timeIntervalSince(lastUpdateTime)
+        if elapsed < interval {
+          let delay = interval - elapsed
+          try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
         }
 
         if Task.isCancelled { return }
 
-        let result = await Task.detached(priority: .userInitiated) {
-          MarkdownBlockSplitter.split(markdown)
+        let previousBlocks = self.blocks
+
+        let updatedBlocks = await Task.detached(priority: .userInitiated) {
+          let parser = AttributedStringMarkdownParser(
+            baseURL: baseURL,
+            syntaxExtensions: syntaxExtensions
+          )
+          let rawBlocks = MarkdownBlockSplitter.split(markdown, isStreaming: isStreaming)
+
+          var processedBlocks: [BlockInfo] = []
+          for (index, newBlock) in rawBlocks.enumerated() {
+            if index < previousBlocks.count {
+              let existing = previousBlocks[index]
+              if existing.markdown == newBlock.markdown &&
+                 existing.renderMarkdown == newBlock.renderMarkdown &&
+                 existing.kind == newBlock.kind &&
+                 existing.isUnclosedCodeBlock == newBlock.isUnclosedCodeBlock {
+                // 内容に変更がない過去ブロックはパース済みの AttributedString と既存 ID をそのまま再利用（キャッシュ）
+                processedBlocks.append(existing)
+                continue
+              }
+            }
+
+            // 新規または更新されたブロックのみバックグラウンドでパースを実行
+            let parsedAttr = (try? parser.attributedString(for: newBlock.renderMarkdown)) ?? AttributedString()
+            let blockId = (index < previousBlocks.count && previousBlocks[index].kind == newBlock.kind) ? previousBlocks[index].id : UUID()
+            processedBlocks.append(
+              BlockInfo(
+                id: blockId,
+                markdown: newBlock.markdown,
+                renderMarkdown: newBlock.renderMarkdown,
+                kind: newBlock.kind,
+                isUnclosedCodeBlock: newBlock.isUnclosedCodeBlock,
+                attributedString: parsedAttr
+              )
+            )
+          }
+          return processedBlocks
         }.value
 
-        if !Task.isCancelled {
-          if self.blocks != result {
-            self.blocks = result
-            self.lastUpdateTime = Date()
-          }
+        if Task.isCancelled { return }
+
+        if self.blocks != updatedBlocks {
+          self.blocks = updatedBlocks
+          self.lastUpdateTime = Date()
         }
       }
     }
@@ -216,21 +264,25 @@ extension StructuredText {
     // ブロック単位の描画を最適化するためのEquatableなラッパーView
     private struct BlockView: View, Equatable {
       let block: BlockInfo
-      let baseURL: URL?
-      let syntaxExtensions: [AttributedStringMarkdownParser.SyntaxExtension]
 
       @Environment(\.listSpacing) private var listSpacing
 
       nonisolated static func == (lhs: BlockView, rhs: BlockView) -> Bool {
-        return lhs.block == rhs.block &&
-               lhs.baseURL == rhs.baseURL
+        return lhs.block.id == rhs.block.id &&
+               lhs.block == rhs.block
       }
 
       var body: some View {
-        var blockView = StructuredText(markdown: block.markdown, baseURL: baseURL, syntaxExtensions: syntaxExtensions)
-        let _ = { blockView.managesOwnSelection = false }()
-        return blockView
-          .textual.blockSpacing(spacing(for: block.kind))
+        WithAttachments(block.attributedString) {
+          BlockContent(content: $0)
+            .coordinateSpace(.textContainer)
+            .accessibilityElement(children: .contain)
+        }
+        .lineLimit(nil)
+        .textual.blockSpacing(spacing(for: block.kind))
+        .transaction { transaction in
+          transaction.animation = nil
+        }
       }
 
       private func spacing(for kind: BlockKind) -> FontScaled<BlockSpacing> {
@@ -238,6 +290,8 @@ extension StructuredText {
         case .list:
           return listSpacing
         case .table:
+          return .fontScaled(top: 0.8, bottom: 0.8)
+        case .codeBlock:
           return .fontScaled(top: 0.8, bottom: 0.8)
         case .header:
           return .fontScaled(top: 0)

@@ -74,11 +74,6 @@ extension StructuredText {
       proposal: ProposedViewSize,
       subviews: Subviews, cache: inout Cache
     ) -> CGSize {
-      // Return cached size if the proposal width matches the cached width
-      if let cachedHeight = cache.totalHeight, let cachedWidth = cache.totalWidth, cache.proposalWidth == proposal.width {
-        return CGSize(width: cachedWidth, height: cachedHeight)
-      }
-
       if let width = proposal.width, width <= 0 {
         return .zero
       }

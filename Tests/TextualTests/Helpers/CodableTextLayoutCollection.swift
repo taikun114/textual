@@ -10,6 +10,19 @@
 
     let _layouts: [CodableTextLayout]
 
+    var identity: Int {
+      var hasher = Hasher()
+      for layout in _layouts {
+        hasher.combine(layout.origin.x)
+        hasher.combine(layout.origin.y)
+        hasher.combine(layout.bounds.origin.x)
+        hasher.combine(layout.bounds.origin.y)
+        hasher.combine(layout.bounds.size.width)
+        hasher.combine(layout.bounds.size.height)
+      }
+      return hasher.finalize()
+    }
+
     func isEqual(to other: any Textual.TextLayoutCollection) -> Bool {
       _layouts == (other as? CodableTextLayoutCollection)?._layouts
     }
