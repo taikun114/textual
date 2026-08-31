@@ -21,7 +21,6 @@ extension StructuredText {
       let resolvedStyle = headingStyle.resolve(configuration: configuration)
 
       AnyView(resolvedStyle)
-        .id(content.slugified())
     }
 
     private var label: some View {
