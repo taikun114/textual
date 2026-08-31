@@ -176,6 +176,7 @@ extension StructuredText {
           BlockView(block: block)
         }
       }
+      .coordinateSpace(.textContainer)
       .transaction { transaction in
         transaction.animation = nil
       }
@@ -275,7 +276,6 @@ extension StructuredText {
       var body: some View {
         WithAttachments(block.attributedString) {
           BlockContent(content: $0)
-            .coordinateSpace(.textContainer)
             .accessibilityElement(children: .contain)
         }
         .lineLimit(nil)

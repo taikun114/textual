@@ -48,17 +48,28 @@
       
       if result === self {
         let localPoint = convert(point, from: superview)
-        
-        // 2. テキストの上であれば必ず自身がイベントを受け取る
-        if model.isPointOverText(localPoint) {
-          return self
-        }
 
-        // 3. 除外領域（コードブロックやボタンなど）では、自身を無視（nil）してイベントを譲る
+        // 2. 除外領域（コードブロックやボタンなど）では、自身を無視（nil）してイベントを譲る
         let isExcluded = exclusionRects.contains { $0.contains(localPoint) }
         if isExcluded {
           return nil
         }
+
+        // 3. テキストの上であれば必ず自身がイベントを受け取る
+        if model.isPointOverText(localPoint) {
+          return self
+        }
+
+        // 4. 既存の選択範囲内をクリックした場合も自身がイベントを受け取る
+        if let selectedRange = model.selectedRange, !selectedRange.isCollapsed {
+          let selectionRects = model.selectionRects(for: selectedRange)
+          if selectionRects.contains(where: { $0.rect.contains(localPoint) }) {
+            return self
+          }
+        }
+
+        // 5. テキスト上でもなく除外領域でもない場所（余白や背後のUI要素）は透過させる
+        return nil
       }
 
       return result

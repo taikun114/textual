@@ -84,18 +84,18 @@ public struct Overflow<Content: View>: View {
       .onScrollGeometryChange(for: CGFloat.self, of: \.containerSize.width) {
         containerWidth = $1
       }
-      // Always propagate gesture exclusion area to the parent selection overlay.
-      // This ensures that even when using integrated selection, the parent overlay
-      // doesn't block interactions with the scrollbars or other parts of this view.
-      .background(
-        GeometryReader { geometry in
-          Color.clear
-            .preference(
-              key: OverflowFrameKey.self,
-              value: [geometry.frame(in: .textContainer)]
-            )
-        }
-      )
+      // Propagate gesture exclusion area when not integrating selection with parent.
+      .if(!isIntegratedSelection) {
+        $0.background(
+          GeometryReader { geometry in
+            Color.clear
+              .preference(
+                key: OverflowFrameKey.self,
+                value: [geometry.frame(in: .textContainer)]
+              )
+          }
+        )
+      }
     }
   }
 }
