@@ -50,10 +50,13 @@ enum MarkdownBlockSplitter {
         
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            let isFence = trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~")
+            let indent = leadingIndentCount(line)
+            let isFencePrefix = trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~")
+            // インデントが4未満の場合のみトップレベルのフェンスコードブロック開始と判定
+            let isTopLevelFenceStart = !inCodeBlock && indent < 4 && isFencePrefix
             
             if !inCodeBlock {
-                if isFence {
+                if isTopLevelFenceStart {
                     // コードブロック開始直前にたまっていた通常テキストがあれば確定
                     if !currentBlockLines.isEmpty {
                         let text = currentBlockLines.joined(separator: "\n")
@@ -90,13 +93,14 @@ enum MarkdownBlockSplitter {
             } else {
                 // コードブロック内部
                 currentBlockLines.append(line)
-                if isFence && trimmed.hasPrefix(codeBlockFence) {
+                if isFencePrefix && trimmed.hasPrefix(codeBlockFence) {
                     // コードブロック終了
                     inCodeBlock = false
                     let text = currentBlockLines.joined(separator: "\n")
+                    let render = dedent(text)
                     blocks.append(.init(
                         markdown: text,
-                        renderMarkdown: text,
+                        renderMarkdown: render,
                         kind: .codeBlock,
                         isUnclosedCodeBlock: false
                     ))
@@ -111,7 +115,7 @@ enum MarkdownBlockSplitter {
             let text = currentBlockLines.joined(separator: "\n")
             if inCodeBlock {
                 // 未完了のコードブロック
-                let renderMarkdown = text + "\n" + (codeBlockFence.isEmpty ? "```" : codeBlockFence)
+                let renderMarkdown = dedent(text) + "\n" + (codeBlockFence.isEmpty ? "```" : codeBlockFence)
                 blocks.append(.init(
                     markdown: text,
                     renderMarkdown: renderMarkdown,
@@ -120,10 +124,12 @@ enum MarkdownBlockSplitter {
                 ))
             } else {
                 if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    let kind = guessKind(text, inCodeBlock: false)
+                    let render = (kind == .codeBlock) ? dedent(text) : text
                     blocks.append(.init(
                         markdown: text,
-                        renderMarkdown: text,
-                        kind: guessKind(text, inCodeBlock: false),
+                        renderMarkdown: render,
+                        kind: kind,
                         isUnclosedCodeBlock: false
                     ))
                 }
@@ -131,6 +137,26 @@ enum MarkdownBlockSplitter {
         }
         
         return blocks
+    }
+    
+    private static func leadingIndentCount(_ line: String) -> Int {
+        let spaces = line.prefix(while: { $0 == " " || $0 == "\t" })
+        return spaces.reduce(0) { $0 + ($1 == "\t" ? 4 : 1) }
+    }
+    
+    private static func dedent(_ text: String) -> String {
+        let lines = text.components(separatedBy: "\n")
+        let nonEmpties = lines.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        guard !nonEmpties.isEmpty else { return text }
+        let minIndent = nonEmpties.map { leadingIndentCount($0) }.min() ?? 0
+        guard minIndent > 0 else { return text }
+        return lines.map { line in
+            let spaces = line.prefix(while: { $0 == " " || $0 == "\t" })
+            if leadingIndentCount(String(spaces)) >= minIndent {
+                return String(line.dropFirst(minIndent))
+            }
+            return line
+        }.joined(separator: "\n")
     }
     
     private static func guessKind(_ markdown: String, inCodeBlock: Bool) -> StructuredText.BlockKind {
