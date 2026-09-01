@@ -156,7 +156,7 @@ extension StructuredText {
     private let syntaxExtensions: [AttributedStringMarkdownParser.SyntaxExtension]
     private let isStreaming: Bool
 
-    @State private var model = StreamingModel()
+    @State private var model: StreamingModel
 
     public init(
       markdown: String,
@@ -168,6 +168,14 @@ extension StructuredText {
       self.baseURL = baseURL
       self.syntaxExtensions = syntaxExtensions
       self.isStreaming = isStreaming
+      self._model = State(
+        initialValue: StreamingModel(
+          markdown: markdown,
+          baseURL: baseURL,
+          syntaxExtensions: syntaxExtensions,
+          isStreaming: isStreaming
+        )
+      )
     }
 
     public var body: some View {
@@ -195,6 +203,32 @@ extension StructuredText {
     @MainActor @Observable final class StreamingModel {
       var blocks: [BlockInfo] = []
       private var lastUpdateTime: Date = .distantPast
+
+      init(
+        markdown: String? = nil,
+        baseURL: URL? = nil,
+        syntaxExtensions: [AttributedStringMarkdownParser.SyntaxExtension] = [],
+        isStreaming: Bool = false
+      ) {
+        if let markdown, !markdown.isEmpty {
+          let parser = AttributedStringMarkdownParser(
+            baseURL: baseURL,
+            syntaxExtensions: syntaxExtensions
+          )
+          let rawBlocks = MarkdownBlockSplitter.split(markdown, isStreaming: isStreaming)
+          self.blocks = rawBlocks.map { newBlock in
+            let parsedAttr = (try? parser.attributedString(for: newBlock.renderMarkdown)) ?? AttributedString()
+            return BlockInfo(
+              markdown: newBlock.markdown,
+              renderMarkdown: newBlock.renderMarkdown,
+              kind: newBlock.kind,
+              isUnclosedCodeBlock: newBlock.isUnclosedCodeBlock,
+              attributedString: parsedAttr
+            )
+          }
+          self.lastUpdateTime = Date()
+        }
+      }
 
       func process(
         markdown: String,
